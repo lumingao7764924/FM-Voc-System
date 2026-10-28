@@ -1,0 +1,33 @@
+---
+description: 前端优先使用 shadcn/ui + Tailwind CSS 开发
+globs: apps/web/**/*.{ts,tsx,css}
+alwaysApply: false
+---
+
+# 前端 UI：shadcn/ui + Tailwind
+
+在 `apps/web` 开发或改样式时：
+
+- **优先**使用 `src/components/ui/*` 的 shadcn 组件（Button、Card、Input、Label、Select、Alert、Badge、Table、Sheet、Popover、Calendar 等）
+- 表单控件（输入、下拉、勾选、开关、**日期**等）**禁止**直接写原生 `<input>` / `<select>` / `<textarea>` / `<input type="date">` 当业务 UI；一律用对应 `ui` 组件（没有则先 `npx shadcn@latest add <component>`）
+- **日期选择**：禁止原生 `type="date"`；用 shadcn `Calendar` + `Popover`（业务封装见 `src/components/date-picker-field.tsx`）。筛选面板 `ListFilterField` 的 `type: 'date'` 已走该封装
+- 列表/筛选/分页优先复用 `src/components/data-table.tsx`，不要另起一套表格样式
+- **优先**用 Tailwind 工具类做布局与响应式（`sm:` / `md:` / `lg:`）
+- 新交互控件：在 `apps/web` 下 `npx shadcn@latest add <component>` 再接入；不要另起手写 CSS 体系或第二套 UI 库（Ant/MUI 等）
+- 样式合并用 `cn()`（**仅** `src/lib/utils.ts`，禁止再装 npm 包 `cn`）
+- **避免**新增大型全局 CSS、非必要内联 `style={{}}`（第三方/虚拟列表定位等除外）
+
+```tsx
+// ❌ BAD — 原生控件当业务 UI
+<select onChange={...}><option>全部</option></select>
+<input type="date" value={...} onChange={...} />
+
+// ✅ GOOD — shadcn ui
+<Select value={v} onValueChange={...}>
+  <SelectTrigger className="h-10 w-full">
+    <SelectValue placeholder="全部" />
+  </SelectTrigger>
+  <SelectContent>...</SelectContent>
+</Select>
+<DatePickerField value={ymd} onChange={setYmd} />
+```

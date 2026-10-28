@@ -1,0 +1,35 @@
+---
+description: IMPORT_DRY_RUN=false 时禁止自动写真实库（测数/导入/同步）
+alwaysApply: true
+---
+
+# 干跑开关与真实库写入
+
+`apps/api/.env` 的 **`IMPORT_DRY_RUN`** 决定导入/映射是否写入 BigQuery（及 GCS）。
+
+## 硬规则
+
+在动手跑任何会写数据的操作前，**先读** `apps/api/.env` 中的 `IMPORT_DRY_RUN`：
+
+### 当 `IMPORT_DRY_RUN=false`（写真库）
+
+- **禁止**自动执行：评论导入、产品映射上传、同步映射、会 `INSERT`/`UPDATE` BQ 的脚本、用真实账号往 API 灌测试 xlsx。
+- **禁止**为了「验证一下」自行造 `TEST-*` /「测试」字样数据写入库。
+- 用户若明确要求在写真库环境下跑导入/测数：先口头确认「会写入真实 BQ」，得到确认后再做；默认不跑。
+- 只读操作（`GET` 列表、健康检查、读代码）可以。
+
+### 当 `IMPORT_DRY_RUN=true`（干跑）
+
+- 可以跑本地内存验证、测试脚本；仍避免无必要的大批量灌数。
+- 测试数据请用明确前缀（如 `TEST-`），并在回复里标明当前为干跑。
+
+## 常见写入入口（禁自动跑）
+
+- `POST /api/imports`、`POST /api/imports/:id/file`
+- `POST /api/mappings/file`
+- `POST /api/reviews/sync-mapping`
+- `scripts/*` 里会调上述 API 或直接写 BQ 的测试
+
+## 为什么
+
+写真库时 Agent 自动跑测数，会把测试 SKU/批次留在真实库（如 `TEST-MAP-*`、文件名含 `test`），事后难清理。

@@ -1,0 +1,18 @@
+{
+  "name": "fm-voc-system",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @voc/api & npm run dev -w @voc/web",
+    "dev:api": "npm run dev -w @voc/api",
+    "dev:web": "npm run dev -w @voc/web",
+    "build": "npm run build -w @voc/shared && npm run build -w @voc/api && npm run build -w @voc/web",
+    "start:api": "npm run start -w @voc/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

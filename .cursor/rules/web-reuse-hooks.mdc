@@ -1,0 +1,55 @@
+---
+description: apps/web 组件复用、Hook 抽离、解耦与性能优先
+globs: apps/web/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Web：复用优先、Hook 抽逻辑、解耦与性能
+
+在 `apps/web` 开发时遵循：
+
+## 1. 可复用 UI → 组件
+
+- 多处会用到的小交互（叹号说明、空态、状态徽标旁提示等）抽到 `src/components/`，页面只传文案/数据
+- 基础控件优先 `src/components/ui/*`（shadcn）；业务组合件放在 `components/` 根下，勿复制粘贴同一段 JSX
+- 示例：说明用 `<InfoHint title="…">文案</InfoHint>`，不要在每个 title 下再写一大段常驻说明
+
+```tsx
+// ❌ 每页复制说明段落
+<p className="text-sm text-muted-foreground">校验未通过的行不会…</p>
+
+// ✅ 复用组件，按需点开
+<InfoHint title="隔离异常">校验未通过的行不会写入 Core…</InfoHint>
+```
+
+## 2. 重复逻辑 / 优化 → Hook
+
+- 跨页面相同的数据订阅、媒体查询、轮询、刷新总线等放到 `src/hooks/`
+- 已有优先复用：`usePageRefresh`（按路由定点刷新）、`useIsMobile`（与 `md` 断点对齐）
+- 页面里不要复制 `matchMedia` / `addEventListener` 样板代码
+
+## 3. 解耦
+
+- 页面负责编排与展示；副作用与共享事件走 hook / 轻量事件（如 `notifyPageRefresh('/history')`）
+- 刷新按**路由 path** 定点通知，勿默认全量刷新；多开页用完整 path（如 `/imports/:id`）
+- 组件 props 保持精简：展示文案用 `children`/`title`，避免把整页 state 塞进小组件
+
+## 4. 可读性
+
+- 命名见意：组件/ hook 一眼能看出用途
+- 长说明、常量文案集中成 `const HINT = { … }` 或独立文案模块，勿散落魔法字符串
+- 单文件职责清晰；超过一屏的交互块优先拆子组件
+
+## 5. 性能优先
+
+- keep-alive 页用路由刷新，避免无意义整树 remount
+- 长列表继续用虚拟列表；勿为说明弹层引入重型依赖
+- 移动端用底部 Sheet、桌面用 Popover 等轻量模式，按 `useIsMobile` 分支，而不是两套页面
+- 新增 `useMemo` / `useCallback` 仅在确有依赖稳定或列表项重渲染问题时使用，不默认包裹一切
+
+## 新功能检查清单
+
+1. 是否已有组件/hook 能覆盖？有则复用
+2. 两处以上相同 UI/逻辑 → 立刻抽组件或 hook
+3. 跨页数据变更 → `notifyPageRefresh(路由)` + 目标页 `usePageRefresh`
+4. 说明类文案 → `InfoHint`，不占主视觉版面

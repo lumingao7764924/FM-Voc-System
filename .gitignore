@@ -1,0 +1,38 @@
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# 本地环境与密钥（绝不要提交）
+.env
+.env.*
+!.env.example
+apps/api/.env
+apps/api/.env.*
+apps/web/.env
+apps/web/.env.*
+keys/
+credentials/
+*.pem
+*.p12
+service-account*.json
+gcp-key*.json
+*-credentials.json
+feimei-product-voc-*.json
+
+# 本地上传/临时文件
+uploads/
+.tmp/
+*.log
+.DS_Store
+
+# 编辑器 / IDE 本地配置（仓库规则可保留 .cursor/rules）
+.cursor/mcp.json
+.vscode/
+.idea/
+
+# 打包上传用压缩包
+*.zip

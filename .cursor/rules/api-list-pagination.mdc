@@ -1,0 +1,33 @@
+---
+description: API 列表接口统一分页与筛选约定
+globs: apps/api/**/*.ts,packages/shared/src/**/*.ts,apps/web/src/pages/**/*.tsx,apps/web/src/components/data-table.tsx,apps/web/src/components/list-filters.tsx
+alwaysApply: false
+---
+
+# API 列表约定
+
+新增或修改 **GET 列表** 接口时：
+
+## Query（统一）
+
+- `page`：1-based，默认 1
+- `pageSize`：默认 20，上限见 `LIST_MAX_PAGE_SIZE`
+- `q`：可选模糊搜索（语义由接口定义）
+- 业务筛选项用短词扩展：`brand`、`status` 等
+- 兼容：仍可读 `limit` / `offset`，但新代码用 `page` / `pageSize`
+- 解析：`apps/api/src/listQuery.ts` 的 `parseListQuery` / `queryStr`
+
+## Response（统一）
+
+```ts
+{ items: T[]; total: number; page: number; pageSize: number }
+```
+
+类型：`PaginatedListResponse<T>`（`@voc/shared`）。可再扩展字段（如 `brands`）。
+
+## 前端
+
+- 拼 Query 用 `apps/web/src/lib/list-query.ts` 的 `buildListQuery`
+- 表格列表用 `DataTable` + `clientPagination={false}`
+- **筛选统一用卡片面板**：`ListFiltersPanel`（桌面 Popover / 移动 Sheet）；不要在工具栏常驻摊开全部筛选项
+- 移动端分页：只保留上下页 +「共 N 条」，不展示每页条数下拉
