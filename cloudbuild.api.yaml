@@ -1,0 +1,41 @@
+# push 到 main 且 apps/api 或 packages/shared 有变更时触发
+# 镜像 → Artifact Registry，并部署 Cloud Run 服务 voc-api
+substitutions:
+  _REGION: us-central1
+  _AR_REPO: review-dashboard
+  _SERVICE: voc-api
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:latest
+      - -f
+      - apps/api/Dockerfile
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: push
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA
+      - --region=${_REGION}
+      - --quiet
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1800s

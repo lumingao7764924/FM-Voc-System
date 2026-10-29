@@ -53,6 +53,8 @@ GCS_RAW_BUCKET=feimei-product-voc-raw
 - Web 用 nginx 反代 `/api`；部署时设置 `API_UPSTREAM=https://voc-api-….run.app`
 - 无自有域名也可：直接用 Cloud Run 分配的 `*.run.app` HTTPS 地址
 - 密钥放 Secret Manager，不要写进镜像 / GitHub
+- **自动部署**：`cloudbuild.api.yaml` / `cloudbuild.web.yaml`，步骤见 [`docs/deploy-cloud-build.md`](docs/deploy-cloud-build.md)  
+  配置好触发器后：本机 `git push` → Cloud Build 构建并更新 Cloud Run
 
 ## 目录
 
