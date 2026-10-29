@@ -10,6 +10,10 @@ COPY apps/web apps/web
 RUN npm run build -w @voc/shared && npm run build -w @voc/web
 
 FROM nginx:1.27-alpine
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+RUN apk add --no-cache gettext
+COPY apps/web/nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY apps/web/docker-entrypoint.sh /docker-entrypoint-voc.sh
+RUN chmod +x /docker-entrypoint-voc.sh
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 8080
+ENTRYPOINT ["/docker-entrypoint-voc.sh"]

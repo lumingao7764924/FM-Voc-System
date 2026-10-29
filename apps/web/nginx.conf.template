@@ -1,0 +1,23 @@
+server {
+  listen 8080;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # API_UPSTREAM 例: https://voc-api-xxxxx.us-central1.run.app
+  location /api/ {
+    proxy_pass ${API_UPSTREAM}/api/;
+    proxy_http_version 1.1;
+    proxy_ssl_server_name on;
+    proxy_set_header Host ${API_HOST};
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Cookie $http_cookie;
+    proxy_pass_header Set-Cookie;
+  }
+
+  location / {
+    try_files $uri /index.html;
+  }
+}

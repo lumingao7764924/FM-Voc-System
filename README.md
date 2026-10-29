@@ -50,7 +50,9 @@ GCS_RAW_BUCKET=feimei-product-voc-raw
 
 - 镜像仓库：`us-central1-docker.pkg.dev/feimei-product-voc/review-dashboard`
 - API 服务绑定可写 BQ/GCS 的 SA（见 `docs/gcp-bootstrap.md` 的 worker SA）
-- Web 静态站 + 反代 `/api` 或分开两个服务、前端配置 API 域名
+- Web 用 nginx 反代 `/api`；部署时设置 `API_UPSTREAM=https://voc-api-….run.app`
+- 无自有域名也可：直接用 Cloud Run 分配的 `*.run.app` HTTPS 地址
+- 密钥放 Secret Manager，不要写进镜像 / GitHub
 
 ## 目录
 
