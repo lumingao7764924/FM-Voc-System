@@ -22,6 +22,7 @@ DROP TABLE IF EXISTS `feimei-product-voc.review_core.dim_product_mapping`;
 DROP TABLE IF EXISTS `feimei-product-voc.review_raw.raw_review_source`;
 
 -- review_control
+DROP TABLE IF EXISTS `feimei-product-voc.review_control.report_share_link`;
 DROP TABLE IF EXISTS `feimei-product-voc.review_control.app_user_access`;
 DROP TABLE IF EXISTS `feimei-product-voc.review_control.app_user`;
 DROP TABLE IF EXISTS `feimei-product-voc.review_control.source_row_hash_registry`;

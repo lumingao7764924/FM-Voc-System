@@ -9,14 +9,22 @@ import {
 import type {
   AnalysisBrandReportSection,
   AnalysisReportResponse,
+  AnalysisReportShareCreateResult,
+  AnalysisReportSharePublicResponse,
 } from '@voc/shared';
 import { ANALYSIS_REPORT_COPY } from '@voc/shared';
-import { Loader2 } from 'lucide-react';
-import { apiFetch } from '@/api';
+import { Check, Copy, Loader2, Share2 } from 'lucide-react';
+import { apiFetch, publicApiFetch } from '@/api';
 import { PageHeader, PageTitle } from '@/components/page-header';
 import { ListFiltersPanel, type ListFilterField } from '@/components/list-filters';
 import { TruncatedText } from '@/components/truncated-text';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from '@/components/ui/popover';
 import { toast } from '@/components/toast';
 import { usePageRefresh } from '@/hooks/use-page-refresh';
 import { cn } from '@/lib/utils';
@@ -93,22 +101,46 @@ function PlatformKpiRow({ brand }: { brand: AnalysisBrandReportSection }) {
 
 export function AnalysisReportPage({
   batchId,
+  shareToken,
   isActive = true,
+  publicView = false,
 }: {
-  batchId: string;
+  batchId?: string;
+  shareToken?: string;
   isActive?: boolean;
+  publicView?: boolean;
 }) {
   const [report, setReport] = useState<AnalysisReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [brandKey, setBrandKey] = useState<string | null>(null);
   const [majorFilter, setMajorFilter] = useState('');
   const [minorFilter, setMinorFilter] = useState('');
+  const [sharing, setSharing] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [shareExpiresAt, setShareExpiresAt] = useState<string | null>(null);
   const loadGenRef = useRef(0);
   const pollRef = useRef<number | null>(null);
+  const shareCloseTimerRef = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     const gen = ++loadGenRef.current;
     try {
+      if (publicView && shareToken) {
+        const res = await publicApiFetch<AnalysisReportSharePublicResponse>(
+          `/api/public/report-shares/${encodeURIComponent(shareToken)}`,
+        );
+        if (gen !== loadGenRef.current) return;
+        setReport(res.report);
+        setShareExpiresAt(res.expiresAt);
+        setLoading(false);
+        return res.report;
+      }
+      if (!batchId) {
+        setLoading(false);
+        return null;
+      }
       const res = await apiFetch<AnalysisReportResponse>(
         `/api/analysis/batches/${encodeURIComponent(batchId)}/report`,
       );
@@ -120,19 +152,24 @@ export function AnalysisReportPage({
       if (gen !== loadGenRef.current) return null;
       setLoading(false);
       toast({
-        title: ANALYSIS_REPORT_COPY.loadFailed,
+        title: publicView
+          ? ANALYSIS_REPORT_COPY.shareExpired
+          : ANALYSIS_REPORT_COPY.loadFailed,
         description: e instanceof Error ? e.message : undefined,
         variant: 'destructive',
       });
       return null;
     }
-  }, [batchId]);
+  }, [batchId, publicView, shareToken]);
 
   useEffect(() => {
     setLoading(true);
     setBrandKey(null);
     setMajorFilter('');
     setMinorFilter('');
+    setShareUrl(null);
+    setCopied(false);
+    setShareOpen(false);
     void load();
     return () => {
       loadGenRef.current += 1;
@@ -140,7 +177,7 @@ export function AnalysisReportPage({
   }, [load]);
 
   useEffect(() => {
-    if (!isActive || !report) return;
+    if (publicView || !isActive || !report) return;
     const pending =
       report.batch.status === 'queued' || report.batch.status === 'running';
     if (!pending) {
@@ -160,11 +197,78 @@ export function AnalysisReportPage({
         pollRef.current = null;
       }
     };
-  }, [report?.batch.status, isActive, load, report]);
+  }, [report?.batch.status, isActive, load, report, publicView]);
 
-  usePageRefresh(`/analytics/batches/${batchId}`, () => {
-    void load();
-  });
+  usePageRefresh(
+    batchId && !publicView ? `/analytics/batches/${batchId}` : [],
+    () => {
+      void load();
+    },
+  );
+
+  const onShare = useCallback(async () => {
+    if (!batchId || publicView || sharing) return;
+    setSharing(true);
+    try {
+      const res = await apiFetch<AnalysisReportShareCreateResult>(
+        `/api/analysis/batches/${encodeURIComponent(batchId)}/share`,
+        { method: 'POST', json: {} },
+      );
+      const url = `${window.location.origin}${res.path}`;
+      setShareUrl(url);
+      setShareExpiresAt(res.expiresAt);
+
+      let ok = false;
+      try {
+        await navigator.clipboard.writeText(url);
+        ok = true;
+      } catch {
+        // 部分浏览器无 clipboard 权限：气泡里仍展示链接，可手动再点复制
+        ok = false;
+      }
+      setCopied(ok);
+      setShareOpen(true);
+      if (shareCloseTimerRef.current != null) {
+        window.clearTimeout(shareCloseTimerRef.current);
+      }
+      shareCloseTimerRef.current = window.setTimeout(() => {
+        setShareOpen(false);
+        setCopied(false);
+      }, 4000);
+    } catch (e) {
+      setShareOpen(false);
+      toast({
+        title: ANALYSIS_REPORT_COPY.shareFailed,
+        description: e instanceof Error ? e.message : undefined,
+        variant: 'destructive',
+      });
+    } finally {
+      setSharing(false);
+    }
+  }, [batchId, publicView, sharing]);
+
+  const copyShareUrlAgain = useCallback(async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast({
+        title: ANALYSIS_REPORT_COPY.shareFailed,
+        description: shareUrl,
+        variant: 'destructive',
+      });
+    }
+  }, [shareUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (shareCloseTimerRef.current != null) {
+        window.clearTimeout(shareCloseTimerRef.current);
+      }
+    };
+  }, []);
 
   const brands = report?.brands?.length
     ? report.brands
@@ -262,7 +366,80 @@ export function AnalysisReportPage({
       <PageHeader
         className="mb-0"
         title={<PageTitle>{ANALYSIS_REPORT_COPY.pageTitle}</PageTitle>}
+        actions={
+          !publicView && batchId && report ? (
+            <Popover
+              open={shareOpen}
+              onOpenChange={(open) => {
+                setShareOpen(open);
+                if (!open && shareCloseTimerRef.current != null) {
+                  window.clearTimeout(shareCloseTimerRef.current);
+                  shareCloseTimerRef.current = null;
+                }
+              }}
+            >
+              <PopoverAnchor asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={sharing}
+                  onClick={() => void onShare()}
+                >
+                  {sharing ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : copied ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Share2 className="size-3.5" />
+                  )}
+                  {ANALYSIS_REPORT_COPY.shareButton}
+                </Button>
+              </PopoverAnchor>
+              <PopoverContent align="end" className="w-80 space-y-2 p-3">
+                <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  {copied ? (
+                    <Check className="size-3.5 text-emerald-500" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                  {copied
+                    ? ANALYSIS_REPORT_COPY.shareCopied
+                    : ANALYSIS_REPORT_COPY.shareButton}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {ANALYSIS_REPORT_COPY.shareHint}
+                </p>
+                {shareUrl ? (
+                  <button
+                    type="button"
+                    className="w-full break-all rounded-md border bg-muted/40 px-2 py-1.5 text-left text-xs tabular-nums text-foreground hover:bg-muted/70"
+                    onClick={() => void copyShareUrlAgain()}
+                    title="再点一次可重新复制"
+                  >
+                    {shareUrl}
+                  </button>
+                ) : null}
+                {shareExpiresAt ? (
+                  <p className="text-[11px] text-muted-foreground tabular-nums">
+                    有效至 {new Date(shareExpiresAt).toLocaleString()}
+                  </p>
+                ) : null}
+              </PopoverContent>
+            </Popover>
+          ) : publicView ? (
+            <Badge variant="secondary" className="font-normal shadow-none">
+              {ANALYSIS_REPORT_COPY.sharePublicBadge}
+            </Badge>
+          ) : null
+        }
       />
+
+      {publicView && shareExpiresAt ? (
+        <p className="text-xs text-muted-foreground tabular-nums">
+          有效至 {new Date(shareExpiresAt).toLocaleString()}
+        </p>
+      ) : null}
 
       {loading && !report ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -272,7 +449,11 @@ export function AnalysisReportPage({
       ) : null}
 
       {!loading && !report ? (
-        <p className="text-sm text-muted-foreground">{ANALYSIS_REPORT_COPY.notFound}</p>
+        <p className="text-sm text-muted-foreground">
+          {publicView
+            ? ANALYSIS_REPORT_COPY.shareExpired
+            : ANALYSIS_REPORT_COPY.notFound}
+        </p>
       ) : null}
 
       {report ? (

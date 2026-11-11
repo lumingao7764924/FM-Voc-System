@@ -27,6 +27,10 @@ import { createAnalysisBatch, getAnalysisBatchDetail } from './analysis/service.
 import { enqueueAnalysisBatch } from './analysis/queue.js';
 import { buildAnalysisReport } from './analysis/report.js';
 import {
+  createReportShareLink,
+  getReportShareLink,
+} from './analysis/shareStore.js';
+import {
   clearAnalysisArtifacts,
   deleteAnalysisBatch,
   listAnalysisBatches,
@@ -500,6 +504,77 @@ export async function registerRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: 'not_found', message: '分析批次不存在或已过期' });
       }
       return maybeEncrypt(report, sessionAesKey(user), enc);
+    } catch (e) {
+      const err = e as { message?: string };
+      return reply.code(500).send({
+        error: 'analysis_report_failed',
+        message: err.message || 'Build analysis report failed',
+      });
+    }
+  });
+
+  /** 登录用户为报告创建 7 天有效短链（URL 不暴露 batchId） */
+  app.post('/api/analysis/batches/:id/share', async (request, reply) => {
+    const user = await requireUser(request);
+    const access = await loadAccessForSession(user);
+    assertAnyPage(access, ['analytics', 'analytics.history']);
+    const enc = request.headers['x-voc-encrypted'] === '1';
+    const { id } = request.params as { id: string };
+    try {
+      const report = await buildAnalysisReport(id);
+      if (!report) {
+        return reply.code(404).send({ error: 'not_found', message: '分析批次不存在或已过期' });
+      }
+      const link = await createReportShareLink({
+        batchId: id,
+        createdBy: user.username,
+      });
+      return maybeEncrypt(
+        {
+          token: link.token,
+          path: `/s/${link.token}`,
+          expiresAt: link.expiresAt,
+        },
+        sessionAesKey(user),
+        enc,
+      );
+    } catch (e) {
+      const err = e as { message?: string };
+      return reply.code(500).send({
+        error: 'analysis_share_failed',
+        message: err.message || 'Create share link failed',
+      });
+    }
+  });
+
+  /** 公开：凭短链 token 读报告，无需登录 */
+  app.get('/api/public/report-shares/:token', async (request, reply) => {
+    const { token } = request.params as { token: string };
+    try {
+      const link = await getReportShareLink(token);
+      if (!link) {
+        return reply.code(410).send({
+          error: 'share_expired',
+          message: '分享链接已过期或无效',
+        });
+      }
+      const report = await buildAnalysisReport(link.batchId);
+      if (!report) {
+        return reply.code(404).send({ error: 'not_found', message: '分析批次不存在或已过期' });
+      }
+      // 公开响应不回传 batchId / reviewIds，避免短链目标被反推
+      const { reviewIds: _omitIds, ...batchRest } = report.batch;
+      const publicReport = {
+        ...report,
+        batch: {
+          ...batchRest,
+          batchId: '',
+        },
+      };
+      return {
+        report: publicReport,
+        expiresAt: link.expiresAt,
+      };
     } catch (e) {
       const err = e as { message?: string };
       return reply.code(500).send({

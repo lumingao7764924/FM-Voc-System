@@ -355,6 +355,12 @@ export const ANALYSIS_REPORT_COPY = {
     '按品牌分区展示；差评=本批 1～3 星样本；平台占比=占该品牌本批差评。',
   missingDetails:
     '本批汇总有条数，但明细未找到（常见原因：当时未建 analysis_run 表，或 API 重启后旧批未持久化评论列表）。请确认已执行 sql/ddl/008_analysis_run.sql 后，在「评论分析」重新跑一次差评分析。接 AI 后归因会更准，但明细本身不依赖 AI。',
+  shareButton: '分享',
+  shareCopied: '链接已复制',
+  shareFailed: '生成分享链接失败',
+  shareHint: '链接 7 天内有效，无需登录即可查看',
+  shareExpired: '分享链接已过期或无效',
+  sharePublicBadge: '公开分享 · 7 天有效',
 } as const;
 
 /** 问题分类树管理（轨道 B / Step 4，无 AI） */

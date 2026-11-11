@@ -23,6 +23,7 @@ import {
 } from '@voc/shared';
 import { apiFetch, setSessionKey } from './api';
 import { LoginPage } from './pages/LoginPage';
+import { SharedReportPage } from './pages/SharedReportPage';
 import { TaskDock } from '@/components/task-dock';
 import { ToastHost } from '@/components/toast';
 import { WorkspaceTabBar } from '@/components/workspace-tab-bar';
@@ -390,6 +391,7 @@ export function App() {
       <>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/s/:token" element={<SharedReportPage />} />
           <Route
             path="/"
             element={

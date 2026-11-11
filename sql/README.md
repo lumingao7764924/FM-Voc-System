@@ -35,10 +35,12 @@ bq query --use_legacy_sql=false < sql/ddl/base_tables.sql
 | `ddl/008_analysis_run.sql` | AI 分析 run / 片段 / 正式问题（已并入 base） |
 | `ddl/009_analysis_batch.sql` | AI 分析批次历史（已并入 base） |
 | `ddl/010_analysis_run_review_id.sql` | 已有 analysis_run 表补 `review_id` 列 |
+| `ddl/011_report_share_link.sql` | 差评报告公开分享短链 |
 
 ```bash
 bq query --use_legacy_sql=false < sql/ddl/007_app_user_access.sql
 bq query --use_legacy_sql=false < sql/ddl/008_analysis_run.sql
 bq query --use_legacy_sql=false < sql/ddl/009_analysis_batch.sql
 bq query --use_legacy_sql=false < sql/ddl/010_analysis_run_review_id.sql
+bq query --use_legacy_sql=false < sql/ddl/011_report_share_link.sql
 ```

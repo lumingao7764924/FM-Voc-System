@@ -31,17 +31,41 @@ export function getSessionKey() {
   return sessionKeyB64;
 }
 
-/** 会话失效：清本地密钥并回到登录页（登录页本身 / 登录请求不跳） */
+/** 会话失效：清本地密钥并回到登录页（登录页本身 / 登录请求 / 公开短链页不跳） */
 function handleUnauthorized(path: string) {
   setSessionKey(null);
   if (typeof window === 'undefined') return;
   if (window.location.pathname.startsWith('/login')) return;
+  if (window.location.pathname.startsWith('/s/')) return;
   if (path.startsWith('/api/auth/login')) return;
+  if (path.startsWith('/api/public/')) return;
   if (redirectingToLogin) return;
   redirectingToLogin = true;
   const next = `${window.location.pathname}${window.location.search}`;
   const q = next && next !== '/' ? `?next=${encodeURIComponent(next)}` : '';
   window.location.assign(`/login${q}`);
+}
+
+/** 公开接口：不带会话、不加密、401 不跳登录 */
+export async function publicApiFetch<T>(path: string): Promise<T> {
+  const res = await fetch(path, { credentials: 'omit' });
+  const text = await res.text();
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  }
+  if (!res.ok) {
+    const msg =
+      data && typeof data === 'object' && 'message' in data
+        ? String((data as { message: string }).message)
+        : res.statusText;
+    throw new Error(msg || '请求失败');
+  }
+  return data as T;
 }
 
 async function importAesKey(): Promise<CryptoKey | null> {

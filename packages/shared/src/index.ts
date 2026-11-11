@@ -917,3 +917,17 @@ export interface AnalysisReportResponse {
   /** 口径说明 */
   notes: string[];
 }
+
+/** 创建差评报告分享短链（不暴露 batchId） */
+export interface AnalysisReportShareCreateResult {
+  token: string;
+  /** 前端路径，如 /s/xxxx */
+  path: string;
+  expiresAt: string;
+}
+
+/** 公开短链读报告 */
+export interface AnalysisReportSharePublicResponse {
+  report: AnalysisReportResponse;
+  expiresAt: string;
+}
