@@ -16,7 +16,8 @@ import { healBatchIfOrphaned } from './import/orphan.js';
 import { fetchBatch, listBatches, updateBatchStatus } from './import/store.js';
 import { processMappingUpload } from './mapping/service.js';
 import { listCurrentMappings, listUnmappedSkus } from './mapping/store.js';
-import { listReviews } from './review/store.js';
+import { listReviewRowsForExport, listReviews } from './review/store.js';
+import { buildReviewExportWorkbook, reviewExportFilename } from './review/exportWorkbook.js';
 import { syncPendingReviewMappings } from './review/syncMapping.js';
 import {
   getAnalyticsBreakdown,
@@ -361,6 +362,37 @@ export async function registerRoutes(app: FastifyInstance) {
       access,
     });
     return maybeEncrypt(result, sessionAesKey(user), enc);
+  });
+
+  app.get('/api/reviews/export', async (request, reply) => {
+    const user = await requireUser(request);
+    const access = await loadAccessForSession(user);
+    assertPage(access, 'reviews.list');
+    const query = request.query as Record<string, unknown>;
+    const list = parseListQuery(query);
+    const rows = await listReviewRowsForExport({
+      dateFrom: queryStr(query, 'dateFrom'),
+      dateTo: queryStr(query, 'dateTo'),
+      brand: queryStr(query, 'brand'),
+      spu: queryStr(query, 'spu'),
+      sku: queryStr(query, 'sku'),
+      country: queryStr(query, 'country'),
+      platform: queryStr(query, 'platform'),
+      mapped: queryStr(query, 'mapped'),
+      q: list.q,
+      ratingMin: queryStr(query, 'ratingMin'),
+      ratingMax: queryStr(query, 'ratingMax'),
+      access,
+    });
+    const buffer = await buildReviewExportWorkbook(rows);
+    const filename = reviewExportFilename();
+    reply.header(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+    reply.header('X-Voc-Export-Count', String(rows.length));
+    return reply.send(buffer);
   });
 
   // —— 评论分析（轨道 A，只读聚合）——

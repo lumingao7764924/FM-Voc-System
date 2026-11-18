@@ -4,8 +4,8 @@ import {
   REVIEW_LIST_COPY,
   labelProductMappingStatus,
 } from '@voc/shared';
-import { Loader2, RefreshCw, Tags } from 'lucide-react';
-import { apiFetch } from '@/api';
+import { Download, Loader2, RefreshCw, Tags } from 'lucide-react';
+import { apiFetch, getCookie } from '@/api';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/toast';
 import { Button } from '@/components/ui/button';
@@ -162,6 +162,7 @@ export function ReviewListPage({ isActive: _isActive = true }: { isActive?: bool
     q: '',
   });
   const [syncing, setSyncing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncMappingResult | null>(null);
   const loadGenRef = useRef(0);
 
@@ -228,6 +229,58 @@ export function ReviewListPage({ isActive: _isActive = true }: { isActive?: bool
       setSyncing(false);
     }
   }, [loadList]);
+
+  const onExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const qs = buildListQuery({
+        brand: filters.brand,
+        country: filters.country,
+        mapped: filters.mapped,
+        ratingMin: filters.ratingMin,
+        ratingMax: filters.ratingMax,
+        q: filters.q,
+      });
+      const csrf = getCookie('voc_csrf');
+      const res = await fetch(`/api/reviews/export?${qs}`, {
+        credentials: 'include',
+        headers: csrf ? { 'x-csrf-token': csrf } : undefined,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        let message = text;
+        try {
+          const body = JSON.parse(text) as { message?: string };
+          if (body.message) message = body.message;
+        } catch {
+          /* 非 JSON */
+        }
+        throw new Error(message || REVIEW_LIST_COPY.exportFailed);
+      }
+      const blob = await res.blob();
+      const header = res.headers.get('Content-Disposition') ?? '';
+      const named = header.match(/filename="?([^";]+)"?/i)?.[1];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = named || 'voc_reviews.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+      const count = Number(res.headers.get('X-Voc-Export-Count'));
+      toast({
+        title: REVIEW_LIST_COPY.exportDone,
+        description: Number.isFinite(count) ? `共 ${count} 条` : undefined,
+      });
+    } catch (e) {
+      toast({
+        title: REVIEW_LIST_COPY.exportFailed,
+        description: e instanceof Error ? e.message : undefined,
+        variant: 'destructive',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [filters]);
 
   const filterFields: DataTableFilterField[] = useMemo(
     () => [
@@ -327,23 +380,40 @@ export function ReviewListPage({ isActive: _isActive = true }: { isActive?: bool
           setPage(1);
         }}
         filterActions={
-          canSyncMapping ? (
+          <>
             <Button
               type="button"
               variant="secondary"
               size="sm"
               className="gap-1.5"
-              disabled={syncing}
-              onClick={() => void onSyncMapping()}
+              disabled={exporting}
+              onClick={() => void onExport()}
             >
-              {syncing ? (
+              {exporting ? (
                 <Loader2 className="size-3.5 animate-spin" />
               ) : (
-                <RefreshCw className="size-3.5" />
+                <Download className="size-3.5" />
               )}
-              {syncing ? REVIEW_LIST_COPY.syncMappingLoading : REVIEW_LIST_COPY.syncMapping}
+              {exporting ? REVIEW_LIST_COPY.exporting : REVIEW_LIST_COPY.export}
             </Button>
-          ) : null
+            {canSyncMapping ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="gap-1.5"
+                disabled={syncing}
+                onClick={() => void onSyncMapping()}
+              >
+                {syncing ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-3.5" />
+                )}
+                {syncing ? REVIEW_LIST_COPY.syncMappingLoading : REVIEW_LIST_COPY.syncMapping}
+              </Button>
+            ) : null}
+          </>
         }
       />
 

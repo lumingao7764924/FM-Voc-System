@@ -186,6 +186,10 @@ export const REVIEW_LIST_COPY = {
   syncResultMatchable: '主数据可命中',
   syncResultOk: '知道了',
   syncFailed: '同步映射失败',
+  export: '导出',
+  exporting: '导出中…',
+  exportFailed: '导出失败',
+  exportDone: '已按当前筛选导出',
 } as const;
 
 /** 评论分析看板（轨道 A，无 AI） */
@@ -200,6 +204,7 @@ export const ANALYTICS_COPY = {
   filterReset: '重置',
   filterDateFrom: '开始日期',
   filterDateTo: '结束日期',
+  filterDateRange: '日期范围',
   filterBrand: '品牌',
   filterSpu: '内部 SPU',
   filterSku: '内部 SKU',

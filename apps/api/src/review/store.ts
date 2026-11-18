@@ -1,5 +1,5 @@
 import { BigQuery } from '@google-cloud/bigquery';
-import type { ReviewListItem, ReviewListResponse } from '@voc/shared';
+import type { AccessPolicy, ReviewListItem, ReviewListResponse } from '@voc/shared';
 import { env } from '../config.js';
 import { formatReviewDisplayTime } from '../bqValue.js';
 import { memoryListFactReviews } from '../import/store.js';
@@ -11,7 +11,6 @@ import {
   reviewFilterWhereSql,
   toFilterParams,
 } from './filters.js';
-import type { AccessPolicy } from '@voc/shared';
 import { applyBrandScopeToFilterBrand } from '../access/policy.js';
 import { getReviewFacets } from '../bq/facets.js';
 
@@ -169,5 +168,122 @@ export async function listReviews(opts: {
   } catch (e) {
     console.warn('[review] list failed, falling back to memory', e instanceof Error ? e.message : e);
     return fromMemory();
+  }
+}
+
+/** 单次导出上限；超过则要求缩小筛选，避免一次拉爆内存 */
+export const REVIEW_EXPORT_MAX_ROWS = 100_000;
+
+export type ReviewExportQuery = {
+  dateFrom?: string;
+  dateTo?: string;
+  brand?: string;
+  spu?: string;
+  sku?: string;
+  country?: string;
+  platform?: string;
+  mapped?: string;
+  q?: string;
+  ratingMin?: string;
+  ratingMax?: string;
+  access?: AccessPolicy;
+};
+
+function memoryRowsForExport(opts: ReviewExportQuery): Record<string, unknown>[] {
+  const scope = opts.access
+    ? applyBrandScopeToFilterBrand(opts.brand, opts.access)
+    : { brand: (opts.brand ?? '').trim(), allowedBrands: null as string[] | null, denyAll: false };
+  const filters = normalizeReviewFilters({ ...opts, brand: scope.brand });
+  const tagged = memoryListFactReviews().map((raw) => ({
+    ...mapReviewRow(raw),
+    raw,
+  }));
+  const filtered = filterMemoryReviews(tagged, filters, {
+    allowedBrands: scope.allowedBrands,
+    denyAll: scope.denyAll,
+  });
+  filtered.sort((a, b) =>
+    String(b.reviewDateLocal ?? '').localeCompare(String(a.reviewDateLocal ?? '')),
+  );
+  return filtered.map((row) => row.raw);
+}
+
+/** 按与列表相同的筛选拉全量（不分页），供导出 xlsx */
+export async function listReviewRowsForExport(
+  opts: ReviewExportQuery = {},
+): Promise<Record<string, unknown>[]> {
+  const take = (rows: Record<string, unknown>[]) => {
+    if (rows.length > REVIEW_EXPORT_MAX_ROWS) {
+      throw Object.assign(
+        new Error(`筛选结果超过 ${REVIEW_EXPORT_MAX_ROWS} 条，请缩小筛选范围后再导出`),
+        { statusCode: 400 },
+      );
+    }
+    return rows;
+  };
+
+  if (env.importDryRun) return take(memoryRowsForExport(opts));
+
+  const scope = opts.access
+    ? applyBrandScopeToFilterBrand(opts.brand, opts.access)
+    : { brand: (opts.brand ?? '').trim(), allowedBrands: null as string[] | null, denyAll: false };
+  const filters = normalizeReviewFilters({ ...opts, brand: scope.brand });
+  const scopeParams = brandScopeParams(scope.allowedBrands, scope.denyAll);
+  const project = env.gcpProjectId;
+  const filterParams = { ...toFilterParams(filters), ...scopeParams };
+
+  try {
+    const [rows] = await getBq().query({
+      query: `
+        SELECT
+          filtered.*,
+          JSON_VALUE(raw.raw_payload, '$.source_channel_label') AS source_channel_label,
+          JSON_VALUE(raw.raw_payload, '$.media_urls') AS media_urls
+        FROM (
+          SELECT
+            review_id,
+            brand_key,
+            platform,
+            country_code,
+            store_id,
+            source_review_id,
+            review_date_local,
+            review_created_at_local,
+            rating_raw,
+            rating_numeric,
+            rating_normalized_5,
+            review_title_original,
+            review_text_original,
+            platform_sku,
+            platform_product_name,
+            asin,
+            platform_product_id,
+            source_updated_at,
+            helpful_vote_count,
+            seller_reply_text,
+            internal_spu,
+            internal_sku,
+            product_name_cn,
+            product_name_en,
+            product_mapping_status,
+            raw_id
+          FROM \`${project}.review_serving.v_review_current\`
+          ${reviewFilterWhereSql()}
+          ORDER BY review_date_local DESC, review_created_at_local DESC, review_id
+          LIMIT @limit
+        ) filtered
+        LEFT JOIN \`${project}.review_raw.raw_review_source\` raw
+          ON raw.raw_id = filtered.raw_id
+        ORDER BY filtered.review_date_local DESC, filtered.review_created_at_local DESC, filtered.review_id
+      `,
+      params: { ...filterParams, limit: REVIEW_EXPORT_MAX_ROWS + 1 },
+      types: BRAND_SCOPE_PARAM_TYPES,
+    });
+    return take(rows as Record<string, unknown>[]);
+  } catch (e) {
+    const status = (e as { statusCode?: number }).statusCode;
+    if (status === 400) throw e;
+    console.warn('[review] export query failed', e instanceof Error ? e.message : e);
+    throw Object.assign(new Error('导出失败，请稍后重试'), { statusCode: 502 });
   }
 }

@@ -18,7 +18,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DatePickerField } from '@/components/date-picker-field';
+import { DatePickerField, DateRangeField } from '@/components/date-picker-field';
 import { useIsMobile } from '@/hooks/use-is-mobile';
 import { cn } from '@/lib/utils';
 
@@ -27,15 +27,31 @@ export type ListFilterField = {
   id: string;
   label?: string;
   placeholder?: string;
-  type?: 'text' | 'select' | 'date';
+  type?: 'text' | 'select' | 'date' | 'date-range';
+  /** date-range：结束日写入的字段 id */
+  rangeToId?: string;
   options?: Array<{ value: string; label: string }>;
   className?: string;
 };
 
 const ALL_VALUE = '__all__';
 
-function countActiveFilters(values: Record<string, string>) {
-  return Object.values(values).filter((v) => v != null && String(v).trim() !== '').length;
+function countActiveFilters(values: Record<string, string>, filters: ListFilterField[]) {
+  const covered = new Set<string>();
+  let count = 0;
+  for (const f of filters) {
+    if (f.type !== 'date-range' || !f.rangeToId) continue;
+    covered.add(f.id);
+    covered.add(f.rangeToId);
+    const from = String(values[f.id] ?? '').trim();
+    const to = String(values[f.rangeToId] ?? '').trim();
+    if (from || to) count += 1;
+  }
+  for (const [key, value] of Object.entries(values)) {
+    if (covered.has(key)) continue;
+    if (value != null && String(value).trim() !== '') count += 1;
+  }
+  return count;
 }
 
 function FilterFields({
@@ -43,11 +59,13 @@ function FilterFields({
   draftFilters,
   setDraftFilters,
   onEnterApply,
+  rangeMonths,
 }: {
   filters: ListFilterField[];
   draftFilters: Record<string, string>;
   setDraftFilters: (next: Record<string, string>) => void;
   onEnterApply?: () => void;
+  rangeMonths: number;
 }) {
   return (
     <div className="grid gap-3">
@@ -84,6 +102,20 @@ function FilterFields({
                   ))}
                 </SelectContent>
               </Select>
+            ) : f.type === 'date-range' ? (
+              <DateRangeField
+                id={fieldId}
+                from={draftFilters[f.id] ?? ''}
+                to={f.rangeToId ? (draftFilters[f.rangeToId] ?? '') : ''}
+                numberOfMonths={rangeMonths}
+                onChange={({ from, to }) =>
+                  setDraftFilters({
+                    ...draftFilters,
+                    [f.id]: from,
+                    ...(f.rangeToId ? { [f.rangeToId]: to } : {}),
+                  })
+                }
+              />
             ) : f.type === 'date' ? (
               <DatePickerField
                 id={fieldId}
@@ -145,12 +177,15 @@ export function ListFiltersPanel({
 
   function reset() {
     const empty: Record<string, string> = {};
-    for (const f of filters) empty[f.id] = '';
+    for (const f of filters) {
+      empty[f.id] = '';
+      if (f.rangeToId) empty[f.rangeToId] = '';
+    }
     setDraft(empty);
     apply(empty);
   }
 
-  const activeCount = countActiveFilters(values);
+  const activeCount = countActiveFilters(values, filters);
 
   const fields = (
     <FilterFields
@@ -158,6 +193,7 @@ export function ListFiltersPanel({
       draftFilters={draft}
       setDraftFilters={setDraft}
       onEnterApply={() => apply(draft)}
+      rangeMonths={isMobile ? 1 : 2}
     />
   );
 
@@ -223,6 +259,12 @@ export function ListFiltersPanel({
           <PopoverContent
             align="start"
             className="flex max-h-[min(36rem,80vh)] w-[22rem] flex-col gap-0 overflow-hidden p-0"
+            onInteractOutside={(event) => {
+              const node = event.target;
+              if (node instanceof Element && node.closest('[data-date-range-popover]')) {
+                event.preventDefault();
+              }
+            }}
           >
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
               {fields}

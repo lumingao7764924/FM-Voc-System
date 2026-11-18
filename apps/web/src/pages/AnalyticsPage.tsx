@@ -203,6 +203,33 @@ function niceCeiling(n: number): number {
   return nice * pow;
 }
 
+/** 横轴刻度：大约 7 个，首尾必留。末点右对齐，和前一个挤在一起时只留最后一天。 */
+function pickAxisLabelIndices(count: number, innerW: number, labelPx: number): Set<number> {
+  if (count <= 0) return new Set();
+  if (count === 1) return new Set([0]);
+  const target = Math.min(7, count);
+  const step = Math.max(1, Math.ceil((count - 1) / (target - 1)));
+  const candidates: number[] = [];
+  for (let i = 0; i < count; i += step) candidates.push(i);
+  if (candidates[candidates.length - 1] !== count - 1) candidates.push(count - 1);
+  const xOf = (i: number) => (i / (count - 1)) * innerW;
+  const kept: number[] = [];
+  for (const i of candidates) {
+    if (kept.length === 0) {
+      kept.push(i);
+      continue;
+    }
+    const prev = kept[kept.length - 1]!;
+    const gap = xOf(i) - xOf(prev);
+    const endAnchored = i === count - 1;
+    const startAnchored = prev === 0;
+    const need = (endAnchored ? labelPx : labelPx / 2) + (startAnchored ? labelPx : labelPx / 2) + 6;
+    if (gap >= need) kept.push(i);
+    else if (endAnchored) kept[kept.length - 1] = i;
+  }
+  return new Set(kept);
+}
+
 function SimpleTrendChart({
   points,
   metric,
@@ -276,9 +303,8 @@ function SimpleTrendChart({
     })
     .join(' ');
 
-  const labelStep = Math.max(1, Math.ceil(points.length / 7));
-  const showLabel = (i: number) =>
-    i === 0 || i === points.length - 1 || i % labelStep === 0;
+  const isWeekLabel = points.some((p) => /^\d{4}-W\d/i.test(p.period));
+  const labelIdx = pickAxisLabelIndices(points.length, innerW, isWeekLabel ? 72 : 32);
 
   const formatTick = (v: number) => {
     if (metric === 'lowRate') return `${Math.round(v)}%`;
@@ -319,7 +345,7 @@ function SimpleTrendChart({
         })}
 
         {points.map((p, i) =>
-          showLabel(i) ? (
+          labelIdx.has(i) ? (
             <text
               key={`x-${p.period}`}
               x={xAt(i)}
@@ -626,8 +652,12 @@ export function AnalyticsPage({ isActive: _isActive = true }: { isActive?: boole
     const countries = overview?.countries ?? [];
     const platforms = overview?.platforms ?? [];
     return [
-      { id: 'dateFrom', label: ANALYTICS_COPY.filterDateFrom, type: 'date' },
-      { id: 'dateTo', label: ANALYTICS_COPY.filterDateTo, type: 'date' },
+      {
+        id: 'dateFrom',
+        rangeToId: 'dateTo',
+        label: ANALYTICS_COPY.filterDateRange,
+        type: 'date-range',
+      },
       {
         id: 'brand',
         label: ANALYTICS_COPY.filterBrand,
