@@ -150,12 +150,14 @@ export function ReviewListPage({ isActive: _isActive = true }: { isActive?: bool
   const [total, setTotal] = useState(0);
   const [brands, setBrands] = useState<string[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
+  const [platforms, setPlatforms] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [filters, setFilters] = useState({
     brand: '',
     country: '',
+    platform: '',
     mapped: '',
     ratingMin: '',
     ratingMax: '',
@@ -176,6 +178,7 @@ export function ReviewListPage({ isActive: _isActive = true }: { isActive?: bool
           pageSize,
           brand: filters.brand,
           country: filters.country,
+          platform: filters.platform,
           mapped: filters.mapped,
           ratingMin: filters.ratingMin,
           ratingMax: filters.ratingMax,
@@ -187,6 +190,7 @@ export function ReviewListPage({ isActive: _isActive = true }: { isActive?: bool
       setTotal(res.total);
       setBrands(res.brands ?? []);
       setCountries(res.countries ?? []);
+      setPlatforms(res.platforms ?? []);
     } catch (e) {
       if (gen !== loadGenRef.current) return;
       toast({
@@ -236,6 +240,7 @@ export function ReviewListPage({ isActive: _isActive = true }: { isActive?: bool
       const qs = buildListQuery({
         brand: filters.brand,
         country: filters.country,
+        platform: filters.platform,
         mapped: filters.mapped,
         ratingMin: filters.ratingMin,
         ratingMax: filters.ratingMax,
@@ -303,6 +308,15 @@ export function ReviewListPage({ isActive: _isActive = true }: { isActive?: bool
         ],
       },
       {
+        id: 'platform',
+        label: REVIEW_LIST_COPY.filterPlatform,
+        type: 'select',
+        options: [
+          { value: '', label: '全部平台' },
+          ...platforms.map((p) => ({ value: p, label: p })),
+        ],
+      },
+      {
         id: 'mapped',
         label: REVIEW_LIST_COPY.filterMapped,
         type: 'select',
@@ -330,7 +344,7 @@ export function ReviewListPage({ isActive: _isActive = true }: { isActive?: bool
         placeholder: REVIEW_LIST_COPY.filterQPlaceholder,
       },
     ],
-    [brands, countries],
+    [brands, countries, platforms],
   );
 
   const hasFilters = Object.values(filters).some((v) => v.trim() !== '');
@@ -372,6 +386,7 @@ export function ReviewListPage({ isActive: _isActive = true }: { isActive?: bool
           setFilters({
             brand: next.brand ?? '',
             country: next.country ?? '',
+            platform: next.platform ?? '',
             mapped: next.mapped ?? '',
             ratingMin: next.ratingMin ?? '',
             ratingMax: next.ratingMax ?? '',

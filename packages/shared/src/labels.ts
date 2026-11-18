@@ -160,6 +160,7 @@ export const REVIEW_LIST_COPY = {
   filterReset: '重置',
   filterBrand: '品牌',
   filterCountry: '地区',
+  filterPlatform: '平台',
   filterMapped: '是否映射',
   filterMappedAll: '全部',
   filterMappedYes: '已映射',
